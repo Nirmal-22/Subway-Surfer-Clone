@@ -36,6 +36,11 @@ class AudioManager {
   bool _musicPlaying = false;
   bool _musicPaused = false;
 
+  /// Pre-warmed low-latency players, one pool per effect. Creating a native
+  /// player per play (what FlameAudio.play does) backs up on Android under
+  /// rapid fire — sounds then drain seconds late.
+  final Map<String, AudioPool> _pools = {};
+
   bool get soundOn => Storage.instance.soundOn;
   bool get musicOn => Storage.instance.musicOn;
 
@@ -43,6 +48,10 @@ class AudioManager {
     if (_loaded) return;
     try {
       await FlameAudio.audioCache.loadAll([..._sfx, 'music.wav']);
+      for (final f in _sfx) {
+        _pools[f] = await FlameAudio.createPool(f,
+            minPlayers: 1, maxPlayers: f.startsWith('coin') ? 3 : 2);
+      }
       _loaded = true;
     } catch (_) {
       // Audio is never allowed to take the game down (e.g. web autoplay
@@ -53,7 +62,12 @@ class AudioManager {
   void play(String name, {double volume = 1.0}) {
     if (!soundOn) return;
     try {
-      FlameAudio.play(name, volume: volume);
+      final pool = _pools[name];
+      if (pool != null) {
+        pool.start(volume: volume);
+      } else {
+        FlameAudio.play(name, volume: volume);
+      }
     } catch (_) {}
   }
 
