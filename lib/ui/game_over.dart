@@ -93,10 +93,9 @@ class GameOverScreen extends StatelessWidget {
                       label: 'SHOP',
                       fontSize: 18,
                       color: const Color(0xFF4FC3F7),
-                      onTap: () {
-                        game.overlays.remove(Overlays.gameOver);
-                        game.overlays.add(Overlays.shop);
-                      },
+                      // Stacks on top so the shop's BACK button lands here
+                      // again (mirrors how the main menu opens it).
+                      onTap: () => game.overlays.add(Overlays.shop),
                     ),
                   ],
                 ),

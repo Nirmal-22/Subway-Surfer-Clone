@@ -37,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeTrackColor: kAccent,
                   value: storage.musicOn,
                   onChanged: (v) async {
+                    AudioManager.instance.click();
                     await AudioManager.instance.setMusicOn(v);
                     setState(() {});
                   },

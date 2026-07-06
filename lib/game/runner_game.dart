@@ -151,17 +151,37 @@ class RunnerGame extends FlameGame {
     countdownN.value = null;
   }
 
+  /// Coins picked up in a live run are kept even when the run is abandoned
+  /// (restart or quit-to-menu). Finished runs are banked by _finalizeRun.
+  void _bankLiveRunCoins() {
+    if ((phase == GamePhase.running ||
+            phase == GamePhase.paused ||
+            phase == GamePhase.countdown) &&
+        _coinsRun > 0) {
+      Storage.instance.coinBank += _coinsRun;
+      bankN.value = Storage.instance.coinBank;
+    }
+  }
+
   void startGame() {
+    _bankLiveRunCoins();
     _resetWorld();
     phase = GamePhase.running;
-    overlays.removeAll(
-        [Overlays.menu, Overlays.gameOver, Overlays.shop, Overlays.settings, Overlays.howTo]);
+    overlays.removeAll([
+      Overlays.menu,
+      Overlays.pause,
+      Overlays.gameOver,
+      Overlays.shop,
+      Overlays.settings,
+      Overlays.howTo,
+    ]);
     overlays.add(Overlays.hud);
     AudioManager.instance.click();
     AudioManager.instance.startMusic();
   }
 
   void goMenu() {
+    _bankLiveRunCoins();
     _resetWorld();
     phase = GamePhase.menu;
     overlays.removeAll([
@@ -174,13 +194,16 @@ class RunnerGame extends FlameGame {
     ]);
     overlays.add(Overlays.menu);
     AudioManager.instance.click();
+    AudioManager.instance.stopMusic();
   }
 
   void pauseGame() {
-    if (phase != GamePhase.running) return;
+    if (phase != GamePhase.running && phase != GamePhase.countdown) return;
     phase = GamePhase.paused;
+    countdownN.value = null;
     overlays.add(Overlays.pause);
     AudioManager.instance.click();
+    AudioManager.instance.pauseMusic();
   }
 
   void resumeGame() {
@@ -190,10 +213,11 @@ class RunnerGame extends FlameGame {
     _countdownT = 3.0;
     countdownN.value = 3;
     AudioManager.instance.click();
+    AudioManager.instance.resumeMusic();
   }
 
   void togglePause() {
-    if (phase == GamePhase.running) {
+    if (phase == GamePhase.running || phase == GamePhase.countdown) {
       pauseGame();
     } else if (phase == GamePhase.paused) {
       resumeGame();
@@ -321,13 +345,17 @@ class RunnerGame extends FlameGame {
 
   void _updateCoins(double dt) {
     final proj = Projection(size.toSize());
+    // Magnetized coins move scroll + reel per frame and can cross the
+    // player plane in a single step at high speed, so they get a wider
+    // collection window.
+    final grabDepth = _magnetT > 0 ? 2.4 : 1.0;
     for (final c in coins) {
       if (_magnetT > 0 && c.d < 14 && c.d > -1) {
         c.lane += (player.lanePos - c.lane) * min(1, dt * 9);
         c.h += ((player.airHeight + 0.6) - c.h) * min(1, dt * 9);
         c.d -= 14 * dt; // reel it in
       }
-      if (c.d.abs() < 1.0 &&
+      if (c.d.abs() < grabDepth &&
           (c.lane - player.lanePos).abs() < 0.5 &&
           (c.h - (player.airHeight + 0.6)).abs() < 1.1) {
         c.collected = true;
@@ -449,6 +477,7 @@ class RunnerGame extends FlameGame {
     _shake = 14;
     _flash(const Color(0xFFFFFFFF), 0.5);
     AudioManager.instance.crash();
+    AudioManager.instance.stopMusic();
     final proj = Projection(size.toSize());
     particles.burst(
       Offset(proj.screenX(0, player.lanePos), proj.playerPlaneY - 40),

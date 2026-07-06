@@ -24,6 +24,7 @@ class AudioManager {
 
   bool _loaded = false;
   bool _musicPlaying = false;
+  bool _musicPaused = false;
 
   bool get soundOn => Storage.instance.soundOn;
   bool get musicOn => Storage.instance.musicOn;
@@ -62,6 +63,7 @@ class AudioManager {
     try {
       await FlameAudio.bgm.play('music.wav', volume: 0.45);
       _musicPlaying = true;
+      _musicPaused = false;
     } catch (_) {}
   }
 
@@ -70,14 +72,29 @@ class AudioManager {
       await FlameAudio.bgm.stop();
     } catch (_) {}
     _musicPlaying = false;
+    _musicPaused = false;
   }
 
+  Future<void> pauseMusic() async {
+    if (!_musicPlaying || _musicPaused) return;
+    try {
+      await FlameAudio.bgm.pause();
+    } catch (_) {}
+    _musicPaused = true;
+  }
+
+  Future<void> resumeMusic() async {
+    if (!_musicPlaying || !_musicPaused) return;
+    try {
+      await FlameAudio.bgm.resume();
+    } catch (_) {}
+    _musicPaused = false;
+  }
+
+  /// Music plays during runs only, so switching it on just persists the
+  /// preference for the next run; switching it off silences immediately.
   Future<void> setMusicOn(bool on) async {
     Storage.instance.musicOn = on;
-    if (on) {
-      await startMusic();
-    } else {
-      await stopMusic();
-    }
+    if (!on) await stopMusic();
   }
 }

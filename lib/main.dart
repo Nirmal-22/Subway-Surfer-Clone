@@ -49,9 +49,11 @@ class _GameHostState extends State<GameHost> with WidgetsBindingObserver {
   late final RunnerGame _game;
   final _focusNode = FocusNode();
 
-  // Swipe detection: accumulate drag distance, fire on threshold, then reset
-  // so one long drag can queue several moves.
+  // Swipe detection: accumulate drag distance and fire a single action per
+  // gesture once the threshold is crossed. One flick = one move; the next
+  // move needs a new swipe.
   Offset _dragAccum = Offset.zero;
+  bool _swipeFired = false;
   static const _swipeThreshold = 26.0;
 
   @override
@@ -77,9 +79,13 @@ class _GameHostState extends State<GameHost> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) _game.autoPause();
   }
 
-  void _onPanStart(DragStartDetails _) => _dragAccum = Offset.zero;
+  void _onPanStart(DragStartDetails _) {
+    _dragAccum = Offset.zero;
+    _swipeFired = false;
+  }
 
   void _onPanUpdate(DragUpdateDetails details) {
+    if (_swipeFired) return;
     _dragAccum += details.delta;
     final dx = _dragAccum.dx;
     final dy = _dragAccum.dy;
@@ -89,7 +95,7 @@ class _GameHostState extends State<GameHost> with WidgetsBindingObserver {
     } else {
       dy > 0 ? _game.inputRoll() : _game.inputJump();
     }
-    _dragAccum = Offset.zero;
+    _swipeFired = true;
   }
 
   void _onKey(KeyEvent event) {
