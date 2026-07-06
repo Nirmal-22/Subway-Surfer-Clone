@@ -15,6 +15,7 @@ void paintPlayer(
   Player player,
   double time, {
   double shieldT = 0,
+  double invulnT = 0,
   double crashT = 0,
 }) {
   final u = p.pxPerMeter;
@@ -32,6 +33,9 @@ void paintPlayer(
     ),
     Paint()..color = Color(0x44000000 - ((air * 0x22).round() << 24)),
   );
+
+  // Classic invulnerability flicker after a shield pop or revive.
+  if (invulnT > 0 && crashT == 0 && sin(time * 18) < -0.2) return;
 
   canvas.save();
   canvas.translate(x, feetY);

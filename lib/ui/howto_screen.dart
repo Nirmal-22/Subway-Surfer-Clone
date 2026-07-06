@@ -39,9 +39,16 @@ class HowToScreen extends StatelessWidget {
                         'doubles your score'),
                     const _Row(Icons.shield, Color(0xFF039BE5), 'Shield',
                         'survive one hit'),
+                    const _Row(Icons.keyboard_double_arrow_up,
+                        Color(0xFF43A047), 'Super Sneakers',
+                        'mega jumps — sail clean over the signs'),
                     const Divider(color: Colors.white24, height: 28),
                     const _Row(Icons.directions_run, Color(0xFFFFD54F),
                         'Side-swipe a train', 'you stumble — twice and the inspector catches you!'),
+                    const _Row(Icons.air, Color(0xFF80DEEA), 'Near miss',
+                        'shave past danger for bonus points'),
+                    const _Row(Icons.favorite, Color(0xFF66BB6A), 'Revive',
+                        'once per run, spend coins to keep going'),
                     const SizedBox(height: 18),
                     Center(
                       child: ChunkyButton(

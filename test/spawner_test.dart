@@ -87,4 +87,20 @@ void main() {
     expect(powerups, isNotEmpty);
     expect(spawner.tierFor(3000), 3);
   });
+
+  test('every powerup type shows up over a long run', () {
+    final spawner = Spawner(Random(7));
+    final seen = <PowerupType>{};
+    for (var dist = 0.0; dist < 15000; dist += 50) {
+      spawner.fillTo(
+        distance: dist,
+        ahead: 70,
+        speed: 25,
+        obstacle: (_) {},
+        coin: (_) {},
+        powerup: (pu) => seen.add(pu.type),
+      );
+    }
+    expect(seen, PowerupType.values.toSet());
+  });
 }

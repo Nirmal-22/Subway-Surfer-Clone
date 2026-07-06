@@ -63,6 +63,18 @@ void main() {
     expect(p.lanePos, closeTo(0, 0.001));
   });
 
+  test('super sneakers raise the jump arc and reset clears the boost', () {
+    final p = freshPlayer();
+    p.jumpBoost = 1.55;
+    p.jump();
+    tick(p, Player.jumpDuration / 2);
+    // Mid-jump apex must beat an unboosted jump's ceiling.
+    expect(p.airHeight, greaterThan(Player.jumpHeight));
+    expect(p.airHeight, greaterThan(2.9)); // clears a signal gate
+    p.reset();
+    expect(p.jumpBoost, 1.0);
+  });
+
   test('dead players ignore input', () {
     final p = freshPlayer();
     p.action = PlayerAction.dead;

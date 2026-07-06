@@ -11,13 +11,23 @@ class AudioManager {
 
   static const _sfx = [
     'coin.wav',
+    'coin_1.wav',
+    'coin_2.wav',
+    'coin_3.wav',
+    'coin_4.wav',
     'jump.wav',
+    'land.wav',
     'roll.wav',
     'swipe.wav',
+    'whoosh.wav',
     'crash.wav',
+    'crash_wood.wav',
+    'crash_clang.wav',
     'stumble.wav',
     'powerup.wav',
     'click.wav',
+    'beep.wav',
+    'go.wav',
     'gameover.wav',
     'highscore.wav',
   ];
@@ -47,14 +57,26 @@ class AudioManager {
     } catch (_) {}
   }
 
-  void coin() => play('coin.wav', volume: 0.5);
+  /// Coin ding that climbs a pentatonic ladder while a pickup chain is
+  /// alive — `combo` 0 plays the base note, 4+ the top one.
+  void coin(int combo) {
+    final step = combo.clamp(0, 4);
+    play(step == 0 ? 'coin.wav' : 'coin_$step.wav', volume: 0.5);
+  }
+
   void jump() => play('jump.wav', volume: 0.6);
+  void land() => play('land.wav', volume: 0.45);
   void roll() => play('roll.wav', volume: 0.6);
   void swipe() => play('swipe.wav', volume: 0.4);
-  void crash() => play('crash.wav', volume: 0.9);
+  void whoosh() => play('whoosh.wav', volume: 0.7);
+  void crashTrain() => play('crash.wav', volume: 0.9);
+  void crashWood() => play('crash_wood.wav', volume: 0.9);
+  void crashClang() => play('crash_clang.wav', volume: 0.9);
   void stumble() => play('stumble.wav', volume: 0.8);
   void powerup() => play('powerup.wav', volume: 0.7);
   void click() => play('click.wav', volume: 0.5);
+  void beep() => play('beep.wav', volume: 0.5);
+  void go() => play('go.wav', volume: 0.6);
   void gameover() => play('gameover.wav', volume: 0.8);
   void highscore() => play('highscore.wav', volume: 0.9);
 

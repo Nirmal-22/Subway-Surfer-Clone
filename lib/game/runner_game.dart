@@ -55,6 +55,7 @@ class RunnerGame extends FlameGame {
   final magnetN = ValueNotifier<double>(0);
   final multiplierN = ValueNotifier<double>(0);
   final shieldN = ValueNotifier<double>(0);
+  final boostN = ValueNotifier<double>(0);
   final countdownN = ValueNotifier<int?>(null);
   final hintN = ValueNotifier<String?>(null);
 
@@ -80,7 +81,19 @@ class RunnerGame extends FlameGame {
   double _magnetT = 0;
   double _multiplierT = 0;
   double _shieldT = 0;
+  double _boostT = 0;
   double _invulnT = 0;
+
+  double _nearMissT = 0; // cooldown between near-miss rewards
+  double _coinComboT = 0; // window keeping the coin pitch ladder alive
+  int _coinCombo = 0;
+  double _dustT = 0; // next running dust puff
+  double _trailT = 0; // next powerup trail spark
+  bool _wasAirborne = false;
+  bool _revived = false;
+
+  /// Screen projection, rebuilt only when the viewport changes.
+  Projection _proj = Projection(const Size(1, 1));
 
   double _guardChase = 0;
   double _guardLane = 0;
@@ -98,6 +111,17 @@ class RunnerGame extends FlameGame {
   CharacterSkin skin = CharacterSkin.all.first;
 
   int get multiplier => _multiplierT > 0 ? 2 : 1;
+
+  /// One paid second chance per run, spent from the coin bank.
+  static const reviveCost = 250;
+
+  bool get canRevive => !_revived && Storage.instance.coinBank >= reviveCost;
+
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    _proj = Projection(size.toSize());
+  }
 
   static const _tutorialHints = [
     (1.5, 'Swipe ◀ ▶ to switch lanes'),
@@ -134,7 +158,15 @@ class RunnerGame extends FlameGame {
     _magnetT = 0;
     _multiplierT = 0;
     _shieldT = 0;
+    _boostT = 0;
     _invulnT = 0;
+    _nearMissT = 0;
+    _coinComboT = 0;
+    _coinCombo = 0;
+    _dustT = 0;
+    _trailT = 0;
+    _wasAirborne = false;
+    _revived = false;
     _guardChase = 0;
     _guardLane = 0;
     _crashT = 0;
@@ -147,6 +179,7 @@ class RunnerGame extends FlameGame {
     magnetN.value = 0;
     multiplierN.value = 0;
     shieldN.value = 0;
+    boostN.value = 0;
     hintN.value = null;
     countdownN.value = null;
   }
@@ -212,8 +245,35 @@ class RunnerGame extends FlameGame {
     phase = GamePhase.countdown;
     _countdownT = 3.0;
     countdownN.value = 3;
-    AudioManager.instance.click();
+    AudioManager.instance.beep();
     AudioManager.instance.resumeMusic();
+  }
+
+  /// Paid second chance: clears the danger around the player and drops them
+  /// back into the same run with a moment of invulnerability.
+  void revive() {
+    if (phase != GamePhase.gameOver || !canRevive) return;
+    Storage.instance.coinBank -= reviveCost;
+    bankN.value = Storage.instance.coinBank;
+    _revived = true;
+
+    // The finished run's coins were already banked by _finalizeRun; the HUD
+    // counter starts a fresh chain while score and distance carry on.
+    _coinsRun = 0;
+    coinsN.value = 0;
+    obstacles.clear();
+    player.reset();
+    _guardChase = 0;
+    _guardLane = 0;
+    _crashT = 0;
+    _invulnT = 2.5;
+    _wasAirborne = false;
+
+    phase = GamePhase.running;
+    overlays.remove(Overlays.gameOver);
+    overlays.add(Overlays.hud);
+    AudioManager.instance.powerup();
+    AudioManager.instance.startMusic();
   }
 
   void togglePause() {
@@ -277,8 +337,10 @@ class RunnerGame extends FlameGame {
         if (_countdownT <= 0) {
           countdownN.value = null;
           phase = GamePhase.running;
+          AudioManager.instance.go();
         } else if (_countdownT.ceil() != before) {
           countdownN.value = _countdownT.ceil();
+          AudioManager.instance.beep();
         }
       case GamePhase.running:
         _updateRun(clamped);
@@ -302,6 +364,11 @@ class RunnerGame extends FlameGame {
 
     player.update(dt, _speed / 12);
     _invulnT = max(0, _invulnT - dt);
+    _nearMissT = max(0, _nearMissT - dt);
+    if (_coinComboT > 0) {
+      _coinComboT -= dt;
+      if (_coinComboT <= 0) _coinCombo = 0;
+    }
 
     // Powerup timers.
     if (_magnetT > 0) magnetN.value = _magnetT = max(0, _magnetT - dt);
@@ -309,6 +376,61 @@ class RunnerGame extends FlameGame {
       multiplierN.value = _multiplierT = max(0, _multiplierT - dt);
     }
     if (_shieldT > 0) shieldN.value = _shieldT = max(0, _shieldT - dt);
+    if (_boostT > 0) boostN.value = _boostT = max(0, _boostT - dt);
+    player.jumpBoost = _boostT > 0 ? 1.55 : 1.0;
+
+    // Touchdown: thud + dust when a jump (or mid-air slam) ends.
+    final airborne = player.airHeight > 0;
+    if (_wasAirborne && !airborne) {
+      AudioManager.instance.land();
+      particles.burst(
+        Offset(_proj.screenX(0, player.lanePos), _proj.playerPlaneY),
+        count: 7,
+        color: const Color(0x88B0BEC5),
+        speed: 70,
+        life: 0.35,
+        size: 3,
+        spread: pi * 0.9,
+        gravity: 260,
+      );
+    }
+    _wasAirborne = airborne;
+
+    // Feet dust while sprinting on the ground.
+    _dustT -= dt;
+    if (_dustT <= 0 && !airborne && !player.isRolling) {
+      _dustT = 0.14;
+      particles.burst(
+        Offset(_proj.screenX(0, player.lanePos), _proj.playerPlaneY + 2),
+        count: 1,
+        color: const Color(0x44CFD8DC),
+        speed: 26,
+        life: 0.35,
+        size: 2.6,
+        spread: 1.2,
+      );
+    }
+
+    // Sparkle trail while a multiplier or sneakers boost is running.
+    if (_multiplierT > 0 || _boostT > 0) {
+      _trailT -= dt;
+      if (_trailT <= 0) {
+        _trailT = 0.055;
+        particles.burst(
+          Offset(_proj.screenX(0, player.lanePos),
+              _proj.playerPlaneY - player.airHeight * _proj.pxPerMeter),
+          count: 1,
+          color: _boostT > 0
+              ? const Color(0xAA69F0AE)
+              : const Color(0xAAFFD54F),
+          speed: 55,
+          life: 0.4,
+          size: 3,
+          baseAngle: pi / 2,
+          spread: 1.4,
+        );
+      }
+    }
 
     // Guard gives up over time.
     _guardChase = max(0, _guardChase - dt / 6);
@@ -326,6 +448,23 @@ class RunnerGame extends FlameGame {
     // Advance the world toward the camera.
     for (final o in obstacles) {
       o.d -= (_speed + o.speed) * dt;
+      // Near miss: the obstacle just cleared the player plane and the
+      // player was partway into its lane — a last-moment dodge.
+      if (!o.passed && o.d + o.length < -0.5) {
+        o.passed = true;
+        if (!o.resolved &&
+            _nearMissT <= 0 &&
+            (o.type.isTrain || o.type == ObstacleType.hurdle)) {
+          final laneDiff = (player.lanePos - o.lane).abs();
+          if (laneDiff >= 0.55 && laneDiff < 0.9) {
+            _nearMissT = 0.5;
+            final bonus = 25 * multiplier;
+            _scoreF += bonus;
+            AudioManager.instance.whoosh();
+            _showHint('CLOSE! +$bonus');
+          }
+        }
+      }
     }
     for (final c in coins) {
       c.d -= _speed * dt;
@@ -344,7 +483,6 @@ class RunnerGame extends FlameGame {
   }
 
   void _updateCoins(double dt) {
-    final proj = Projection(size.toSize());
     // Magnetized coins move scroll + reel per frame and can cross the
     // player plane in a single step at high speed, so they get a wider
     // collection window.
@@ -361,9 +499,12 @@ class RunnerGame extends FlameGame {
         c.collected = true;
         _coinsRun++;
         coinsN.value = _coinsRun;
-        AudioManager.instance.coin();
+        // Quick pickups chain into a rising pitch ladder.
+        if (_coinComboT > 0) _coinCombo = min(_coinCombo + 1, 12);
+        _coinComboT = 0.9;
+        AudioManager.instance.coin(_coinCombo);
         particles.burst(
-          proj.project(c.d, c.lane, h: c.h),
+          _proj.project(c.d, c.lane, h: c.h),
           count: 6,
           color: const Color(0xFFFFD54F),
           speed: 90,
@@ -375,7 +516,6 @@ class RunnerGame extends FlameGame {
   }
 
   void _updatePowerups() {
-    final proj = Projection(size.toSize());
     for (final pu in powerups) {
       if (pu.d.abs() < 1.0 && (pu.lane - player.lanePos).abs() < 0.55) {
         pu.collected = true;
@@ -387,9 +527,12 @@ class RunnerGame extends FlameGame {
             multiplierN.value = _multiplierT = 10;
           case PowerupType.shield:
             shieldN.value = _shieldT = 15;
+          case PowerupType.boost:
+            boostN.value = _boostT = 12;
+            _showHint('SUPER SNEAKERS!');
         }
         particles.burst(
-          proj.project(pu.d, pu.lane.toDouble(), h: 1.05),
+          _proj.project(pu.d, pu.lane.toDouble(), h: 1.05),
           count: 14,
           color: const Color(0xFFFFFFFF),
           speed: 140,
@@ -409,7 +552,8 @@ class RunnerGame extends FlameGame {
 
       final cleared = switch (o.type) {
         ObstacleType.hurdle => player.airHeight > 0.85,
-        ObstacleType.gate => player.isRolling,
+        // Rolling goes under the sign; a sneaker-boosted jump sails over it.
+        ObstacleType.gate => player.isRolling || player.airHeight > 2.9,
         ObstacleType.train || ObstacleType.movingTrain => false,
       };
       if (cleared) continue;
@@ -420,11 +564,27 @@ class RunnerGame extends FlameGame {
         continue;
       }
 
+      // Clipped a hurdle near the top of the jump: trip instead of dying —
+      // the late-but-almost jump reads as unfair as a hard kill.
+      if (o.type == ObstacleType.hurdle && player.airHeight > 0.5) {
+        if (_guardChase > 0.5) {
+          _crash(o.type);
+          return;
+        }
+        o.resolved = true;
+        _guardChase = 1.0;
+        _shake = 5;
+        _flash(const Color(0xFFE53935), 0.25);
+        AudioManager.instance.stumble();
+        _showHint('Tripped!');
+        continue;
+      }
+
       // Side-swipe while changing lanes: stumble instead of dying — unless
       // the guard is already breathing down our neck.
       if (player.isChangingLanes && laneDiff > 0.22) {
         if (_guardChase > 0.5) {
-          _crash();
+          _crash(o.type);
           return;
         }
         o.resolved = true;
@@ -437,7 +597,7 @@ class RunnerGame extends FlameGame {
         continue;
       }
 
-      _crash();
+      _crash(o.type);
       return;
     }
   }
@@ -469,18 +629,26 @@ class RunnerGame extends FlameGame {
     }
   }
 
-  void _crash() {
+  void _crash(ObstacleType hitType) {
     phase = GamePhase.crashing;
     player.action = PlayerAction.dead;
     _crashT = 0;
     _guardChase = 1;
     _shake = 14;
     _flash(const Color(0xFFFFFFFF), 0.5);
-    AudioManager.instance.crash();
+    // Each obstacle family sounds like what it is: trains boom, hurdles
+    // snap, gates clang.
+    switch (hitType) {
+      case ObstacleType.train || ObstacleType.movingTrain:
+        AudioManager.instance.crashTrain();
+      case ObstacleType.hurdle:
+        AudioManager.instance.crashWood();
+      case ObstacleType.gate:
+        AudioManager.instance.crashClang();
+    }
     AudioManager.instance.stopMusic();
-    final proj = Projection(size.toSize());
     particles.burst(
-      Offset(proj.screenX(0, player.lanePos), proj.playerPlaneY - 40),
+      Offset(_proj.screenX(0, player.lanePos), _proj.playerPlaneY - 40),
       count: 18,
       color: const Color(0xFFB0BEC5),
       speed: 190,
@@ -574,7 +742,6 @@ class RunnerGame extends FlameGame {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    final proj = Projection(size.toSize());
     final theme = WorldTheme.forDistance(_distance);
 
     canvas.save();
@@ -584,34 +751,59 @@ class RunnerGame extends FlameGame {
         cos(_time * 39) * _shake * 0.7,
       );
     }
+    // Impact punch-zoom centered on the player for the first crash moments.
+    if (phase == GamePhase.crashing) {
+      final zoom = 1 + 0.05 * sin(pi * min(1.0, _crashT * 1.6));
+      final px = _proj.screenX(0, player.lanePos);
+      final py = _proj.playerPlaneY - 40;
+      canvas.translate(px, py);
+      canvas.scale(zoom);
+      canvas.translate(-px, -py);
+    }
 
-    paintBackground(canvas, proj, theme, _distance, _time);
-    paintTrack(canvas, proj, theme, _distance);
+    paintBackground(canvas, _proj, theme, _distance, _time);
+    paintTrack(canvas, _proj, theme, _distance);
 
     // Far-to-near entity pass so nearer things draw on top.
     final drawables = <(double, void Function())>[
       for (final o in obstacles)
-        (o.d, () => paintObstacle(canvas, proj, theme, o, _time)),
+        (o.d, () => paintObstacle(canvas, _proj, theme, o, _time)),
       for (final c in coins)
-        if (!c.collected) (c.d, () => paintCoin(canvas, proj, c, _time)),
+        if (!c.collected) (c.d, () => paintCoin(canvas, _proj, c, _time)),
       for (final pu in powerups)
         if (!pu.collected)
-          (pu.d, () => paintPowerup(canvas, proj, pu, _time)),
+          (pu.d, () => paintPowerup(canvas, _proj, pu, _time)),
     ]..sort((a, b) => b.$1.compareTo(a.$1));
     for (final d in drawables) {
       d.$2();
     }
 
     if (phase != GamePhase.menu) {
-      paintPlayer(canvas, proj, skin, player, _time,
-          shieldT: _shieldT, crashT: phase == GamePhase.crashing ? _crashT : 0);
-      paintGuard(canvas, proj, _guardLane,
+      paintPlayer(canvas, _proj, skin, player, _time,
+          shieldT: _shieldT,
+          invulnT: _invulnT,
+          crashT: phase == GamePhase.crashing ? _crashT : 0);
+      paintGuard(canvas, _proj, _guardLane,
           phase == GamePhase.crashing ? 1 : _guardChase, _time);
     }
 
     particles.render(canvas);
-    _renderSpeedLines(canvas, proj);
+    _renderSpeedLines(canvas, _proj);
     canvas.restore();
+
+    _paintVignette(canvas);
+    // Red edge glow while the inspector is closing in — quiet danger cue.
+    if (_guardChase > 0.35 && phase == GamePhase.running) {
+      final a = 0.16 * ((_guardChase - 0.35) / 0.65).clamp(0.0, 1.0);
+      canvas.drawRect(
+        (Offset.zero & size.toSize()).deflate(6),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 26
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24)
+          ..color = const Color(0xFFE53935).withValues(alpha: a),
+      );
+    }
 
     if (_flashT > 0) {
       canvas.drawRect(
@@ -619,6 +811,24 @@ class RunnerGame extends FlameGame {
         Paint()..color = _flashColor.withValues(alpha: min(0.5, _flashT)),
       );
     }
+  }
+
+  Size _vignetteSize = Size.zero;
+  Paint? _vignettePaint;
+
+  void _paintVignette(Canvas canvas) {
+    final s = size.toSize();
+    if (s != _vignetteSize || _vignettePaint == null) {
+      _vignetteSize = s;
+      _vignettePaint = Paint()
+        ..shader = Gradient.radial(
+          Offset(s.width / 2, s.height * 0.55),
+          s.longestSide * 0.72,
+          const [Color(0x00000000), Color(0x00000000), Color(0x52000000)],
+          const [0.0, 0.6, 1.0],
+        );
+    }
+    canvas.drawRect(Offset.zero & s, _vignettePaint!);
   }
 
   void _renderSpeedLines(Canvas canvas, Projection proj) {

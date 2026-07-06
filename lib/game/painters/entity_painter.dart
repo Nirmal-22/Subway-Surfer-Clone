@@ -278,6 +278,20 @@ void paintCoin(Canvas canvas, Projection p, Coin c, double time) {
         center: center, width: r * 0.28 * spin, height: r * 0.9),
     Paint()..color = const Color(0xFFF9A825),
   );
+
+  // Occasional four-point sparkle so coin rows glitter.
+  final tw = (time * 1.7 + (identityHashCode(c) % 97) * 0.41) % 2.8;
+  if (tw < 0.3 && r > 2) {
+    final a = sin(pi * tw / 0.3);
+    final sp = Paint()
+      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.9 * a)
+      ..strokeWidth = r * 0.16
+      ..strokeCap = StrokeCap.round;
+    final sc = center.translate(r * 0.45, -r * 0.45);
+    final len = r * (0.5 + 0.4 * a);
+    canvas.drawLine(sc.translate(-len, 0), sc.translate(len, 0), sp);
+    canvas.drawLine(sc.translate(0, -len), sc.translate(0, len), sp);
+  }
 }
 
 final _labelCache = <String, TextPainter>{};
@@ -312,7 +326,18 @@ void paintPowerup(Canvas canvas, Projection p, Powerup pu, double time) {
     PowerupType.magnet => const Color(0xFFE53935),
     PowerupType.multiplier => const Color(0xFF8E24AA),
     PowerupType.shield => const Color(0xFF039BE5),
+    PowerupType.boost => const Color(0xFF43A047),
   };
+
+  // Expanding pulse ring calling attention from a distance.
+  final pulse = (time * 1.3 + pu.d * 0.2) % 1.0;
+  canvas.drawCircle(
+      center,
+      r * (1.1 + pulse * 0.75),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.09
+        ..color = color.withValues(alpha: 0.45 * (1 - pulse)));
 
   // Glow + bubble.
   canvas.drawCircle(
@@ -367,5 +392,18 @@ void paintPowerup(Canvas canvas, Projection p, Powerup pu, double time) {
         ..lineTo(center.dx - r * 0.45, center.dy - r * 0.3)
         ..close();
       canvas.drawPath(path, Paint()..color = color);
+    case PowerupType.boost:
+      // Springy double chevron: super sneakers launch you upward.
+      final chev = Paint()
+        ..color = color
+        ..strokeWidth = r * 0.22
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+      for (final dy in [r * 0.32, -r * 0.12]) {
+        canvas.drawLine(Offset(center.dx - r * 0.42, center.dy + dy),
+            Offset(center.dx, center.dy + dy - r * 0.42), chev);
+        canvas.drawLine(Offset(center.dx + r * 0.42, center.dy + dy),
+            Offset(center.dx, center.dy + dy - r * 0.42), chev);
+      }
   }
 }

@@ -27,6 +27,10 @@ class Player {
   /// Advances the run cycle animation; scaled by world speed.
   double runPhase = 0;
 
+  /// Jump arc multiplier — 1.0 normally, raised by the Super Sneakers
+  /// powerup so the same jump clears higher obstacles.
+  double jumpBoost = 1;
+
   void reset() {
     lane = 0;
     lanePos = 0;
@@ -35,6 +39,7 @@ class Player {
     action = PlayerAction.running;
     actionT = 0;
     runPhase = 0;
+    jumpBoost = 1;
   }
 
   bool get isChangingLanes => _laneT < 1;
@@ -42,8 +47,9 @@ class Player {
   bool get isJumping => action == PlayerAction.jumping;
 
   /// Feet height above the ground in meters.
-  double get airHeight =>
-      isJumping ? jumpHeight * sin(pi * actionT.clamp(0.0, 1.0)) : 0;
+  double get airHeight => isJumping
+      ? jumpHeight * jumpBoost * sin(pi * actionT.clamp(0.0, 1.0))
+      : 0;
 
   double get bodyHeight => isRolling ? rollingHeight : standingHeight;
 

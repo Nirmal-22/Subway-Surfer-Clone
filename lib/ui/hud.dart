@@ -43,8 +43,11 @@ class Hud extends StatelessWidget {
                   const SizedBox(height: 6),
                   ValueListenableBuilder(
                     valueListenable: game.coinsN,
-                    builder: (_, coins, __) => StatChip(
-                        icon: Icons.monetization_on, value: '$coins'),
+                    builder: (_, coins, __) => _Bump(
+                      trigger: coins,
+                      child: StatChip(
+                          icon: Icons.monetization_on, value: '$coins'),
+                    ),
                   ),
                 ],
               ),
@@ -83,6 +86,11 @@ class Hud extends StatelessWidget {
                     listenable: game.shieldN,
                     icon: Icons.shield,
                     color: const Color(0xFF039BE5),
+                  ),
+                  _PowerupChip(
+                    listenable: game.boostN,
+                    icon: Icons.keyboard_double_arrow_up,
+                    color: const Color(0xFF43A047),
                   ),
                 ],
               ),
@@ -134,6 +142,30 @@ class Hud extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Scale-pop wrapper: bumps its child whenever [trigger] changes.
+class _Bump extends StatelessWidget {
+  const _Bump({required this.trigger, required this.child});
+
+  final Object trigger;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(trigger),
+      tween: Tween(begin: 1.28, end: 1),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutBack,
+      builder: (_, s, child) => Transform.scale(
+        scale: s,
+        alignment: Alignment.centerLeft,
+        child: child,
+      ),
+      child: child,
     );
   }
 }

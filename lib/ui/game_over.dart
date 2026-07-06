@@ -71,6 +71,17 @@ class GameOverScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
+                if (game.canRevive) ...[
+                  ChunkyButton(
+                    label: 'REVIVE  •  ${RunnerGame.reviveCost}',
+                    icon: Icons.favorite,
+                    width: 240,
+                    fontSize: 22,
+                    color: const Color(0xFF66BB6A),
+                    onTap: game.revive,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 ChunkyButton(
                   label: 'RUN AGAIN',
                   icon: Icons.replay_rounded,

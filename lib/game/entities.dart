@@ -51,6 +51,10 @@ class Obstacle {
   /// Set once the player has stumbled on / shield-popped this obstacle so it
   /// can't hit twice.
   bool resolved = false;
+
+  /// Set once the obstacle has fully passed the player plane, so the
+  /// near-miss check runs exactly once per obstacle.
+  bool passed = false;
 }
 
 class Coin {
@@ -63,7 +67,7 @@ class Coin {
   bool collected = false;
 }
 
-enum PowerupType { magnet, multiplier, shield }
+enum PowerupType { magnet, multiplier, shield, boost }
 
 class Powerup {
   Powerup({required this.type, required this.lane, required this.d});

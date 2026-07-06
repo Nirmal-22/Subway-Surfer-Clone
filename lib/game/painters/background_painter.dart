@@ -25,6 +25,18 @@ void paintBackground(Canvas canvas, Projection p, WorldTheme theme,
     Paint()..color = theme.ground,
   );
 
+  // Atmospheric haze where the ground meets the sky, softening the seam.
+  final hazeH = h * 0.10;
+  canvas.drawRect(
+    Rect.fromLTWH(0, p.horizonY - 1, w, hazeH),
+    Paint()
+      ..shader = Gradient.linear(
+        Offset(0, p.horizonY - 1),
+        Offset(0, p.horizonY + hazeH),
+        [theme.skyBottom.withValues(alpha: 0.55), const Color(0x00000000)],
+      ),
+  );
+
   // Stars at night.
   if (theme.nightness > 0.25) {
     final starPaint = Paint()
