@@ -1,6 +1,6 @@
 {
-    "name": "metro_dash",
-    "short_name": "metro_dash",
+    "name": "Metro Dash",
+    "short_name": "Metro Dash",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
